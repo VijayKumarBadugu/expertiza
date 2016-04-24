@@ -1,9 +1,233 @@
 
 <script>
-    $(function () { 
-      $("[data-toggle='tooltip']").tooltip(); 
+var sortAscending = true;
+var childRows = [], hiddenRows = [];
+    $(function () {
+      $("[data-toggle='tooltip']").tooltip();
+      setupSortableColumns();
       $("#scoresTable").tablesorter();
+      setButtonText();
+
+      $("#sortColumnsButton").click(function() {
+        if (sortAscending) {
+          sortColumnsAscending();
+        } else {
+          sortColumnsDescending();
+        }
+
+        sortAscending = !sortAscending;
+        setButtonText();
+      });
     });
+
+function setButtonText() {
+  if (sortAscending) {
+    $("#sortColumnsButton").html("Sort review totals in ascending order");
+  } else {
+    $("#sortColumnsButton").html("Sort review totals in descending order");
+  }
+}
+
+function transposeScoresTable() {
+  storeChildRows();
+  $("#scoresTable").trigger("destroy");
+    var table = $('#scoresTable');
+    table.find('thead tr').detach().prependTo( table.find('tbody') );
+    var t = table.find('tbody').eq(0);
+    var r = t.find('tr');
+    var cols= r.length;
+    var rows= r.eq(0).find('td,th').length;
+    var cell, next, tem, i = 0;
+    var tb= $('<tbody></tbody>');
+
+    while(i<rows){
+        cell= 0;
+        tem= $('<tr></tr>');
+        while(cell<cols){
+            next= r.eq(cell++).find('td,th').eq(0);
+            tem.append(next);
+        }
+        tb.append(tem);
+        ++i;
+    }
+    table.find('tbody').remove();
+    $(tb).appendTo(table);
+    $(table)
+        .find('tbody tr:eq(0)')
+        .detach()
+        .appendTo( table.find('thead') )
+        .children()
+        .each(function(){
+            $(this).replaceWith('<th scope="col">'+$(this).html()+'</th>');
+        });
+    $(table)
+        .find('tbody tr th:first-child')
+        .each(function(){
+            $(this).replaceWith('<td scope="row">'+$(this).html()+'</td>');
+        });
+    table.show();
+}
+
+function setupSortableColumns() {
+  var tableHeaders = $("#scoresTable>thead>tr>th");
+  tableHeaders.each(function(index) {
+
+    if ($(this).text().trim() === "Criterion" || $(this).text().trim() === "Avg") {
+      if (!$(this).hasClass("sorter-true")) {
+        $(this).addClass("sorter-true");
+      }
+    } else {
+      if (!$(this).hasClass("sorter-false")) {
+        $(this).addClass("sorter-false");
+      }
+    }
+  });
+}
+
+function storeChildRows() {
+  $("#scoresTable>tbody>tr").each(function() {
+    if ($(this).hasClass("tablesorter-childRow")) {
+      childRows.push($(this));
+      $(this).remove();
+    }
+  });
+}
+
+function restoreChildRows() {
+  $("#scoresTable>tbody>tr").each(function(index, value) {
+    $(this).after(childRows[index]);
+  });
+
+  childRows = [];
+}
+
+function setupTBodies() {
+  $("#scoresTable>tbody>tr").unwrap();
+  $("#scoresTable>tr:eq(0)").wrap("<tbody class='tablesorter-infoOnly'></tbody>");
+
+  var numRemainingRows = $("#scoresTable>tr").size();
+  $("#scoresTable>tr").slice(0, numRemainingRows - 2).wrapAll("<tbody></tbody>");
+  $("#scoresTable>tr").wrapAll("<tbody class='tablesorter-infoOnly'></tbody>");
+  $("#scoresTable").trigger('updateAll', true);
+}
+
+function undoTBodies() {
+  $("#scoresTable>tbody:eq(0)>tr").unwrap();
+  $("#scoresTable>tbody:eq(0)>tr").unwrap();
+  $("#scoresTable>tbody:eq(0)>tr").unwrap();
+  $("#scoresTable>tr").wrapAll("<tbody></tbody>");
+}
+
+function sortTotalsAscending() {
+  var colNum = $("#scoresTable>thead>tr>th").size();
+  var sorting = [[colNum-1,0]];
+  $("#scoresTable").trigger("sorton",[sorting]);
+}
+
+function sortTotalsDescending() {
+  var colNum = $("#scoresTable>thead>tr>th").size();
+  var sorting = [[colNum-1,1]];
+  $("#scoresTable").trigger("sorton",[sorting]);
+}
+
+function addTotalsRow() {
+  //First, we need to add the "rowDataSd" class to the first cell in every row
+  var numRows = $("#scoresTable>tbody>tr").length;
+
+  // for (var i = 0; i < numRows; i++) {
+  //   $("#scoresTable>tbody>tr:eq(" + i + ")>td:first").addClass("rowDataSd");
+  // }
+
+  var numCols = $("#scoresTable>tbody>tr:first>td").length;
+
+  //There are two left columns and two right columns which don't need a totals cell
+  var leftStart = 2, rightStart = 2;
+
+  $("#scoresTable>tbody>tr:last").after("<tr class='totalColumn'></tr>")
+  $("#scoresTable>tbody>tr:last").append("<td>TOTALS</td>");
+
+  for (var i = 1; i < numCols; i++) {
+    if (i >= leftStart && i < numCols - rightStart) {
+      $("#scoresTable>tbody>tr:last").append("<td class='totalCol'></td>");
+    } else {
+      $("#scoresTable>tbody>tr:last").append("<td></td>");
+    }
+  }
+
+  for (i=1;i<$('#scoresTable>tbody>tr:eq(0)>td').length;i++) {
+    if (i >= leftStart && i < numCols - rightStart) {
+      var total = 0;
+      $("#scoresTable>tbody>tr>td:nth-child(" + (i+1) + ")").each(function() {
+        if ($(this).hasClass("rowDataSd")) {
+          total = total + parseInt($(this).text());
+        }
+      });
+
+        $('#scoresTable>tbody>tr:last>td').eq(i).text(total);
+      }
+    }
+}
+
+function removeTotalsRow() {
+  $("#scoresTable>tbody>tr").each(function(index) {
+    if($(this).find("td>div").html() === "TOTALS") {
+      $(this).remove();
+    }
+  });
+}
+
+function sortColumnsAscending() {
+  addTotalsRow();
+  storeHiddenRows();
+  transposeScoresTable();
+  $("#scoresTable").tablesorter();
+  setupTBodies();
+  sortTotalsAscending();
+  undoTBodies();
+  transposeScoresTable();
+  setupSortableColumns();
+  restoreChildRows();
+  restoreHiddenRows();
+  removeTotalsRow();
+  $("#scoresTable").tablesorter();
+  // $("[data-toggle='tooltip']").tooltip();
+  // $(".collapse").collapse();
+}
+
+function sortColumnsDescending() {
+  addTotalsRow();
+  storeHiddenRows();
+  transposeScoresTable();
+  $("#scoresTable").tablesorter();
+  setupTBodies();
+  sortTotalsDescending();
+  undoTBodies();
+  transposeScoresTable();
+  setupSortableColumns();
+  restoreChildRows();
+  restoreHiddenRows();
+  removeTotalsRow();
+  $("#scoresTable").tablesorter();
+  // $("[data-toggle='tooltip']").tooltip();
+  // $(".collapse").collapse();
+}
+
+function storeHiddenRows() {
+  $("#scoresTable>tbody>tr").each(function() {
+    if (!($(this).hasClass("tablesorter-hasChildRow") || $(this).hasClass("tablesorter-childRow") || $(this).hasClass("totalColumn"))) {
+      hiddenRows.push($(this));
+      $(this).remove();
+    }
+  });
+}
+
+function restoreHiddenRows() {
+  for (var i = 0; i < hiddenRows.length; i++) {
+    $("#scoresTable>tbody").append(hiddenRows[i]);
+  }
+
+  hiddenRows = [];
+}
 
 </script>
 
@@ -44,6 +268,7 @@
                     (Round: <%= vm.round.to_s  %> of <%= vm.rounds.to_s  %>)
                 <%end %>
               </h4>
+              <button type="button" id="sortColumnsButton"></button>
               <span class="spn_qsttog" data-toggle="collapse" class="accordion-toggle" data-target="#hid<%= vm.questionnaire_type + vm.round.to_s %>" data-toggle="tooltip" data-placement="right" title="Click to display/hide questions">toggle question list</span>
             <span class="spn_tooltip" data-toggle="tooltip" data-placement="right" title="Colors are scaled from poor to excellent in the following order: red, orange, yellow, light-green, dark-green">color legend</span>
             <span class="spn_tooltip" data-toggle="tooltip" data-placement="right" title="Click a row to see the comments for the respective question. Click 'Review Total' row to see Add'l Comments. Useful tip: decreasing your browser's zoom to 75% or 90% many improve your experience.">interaction legend</span>
@@ -95,7 +320,7 @@
 
                   <!-- actual cells with scores and colored background. -->
                   <% row.score_row.each do |score| %>
-                      <td class="<%= score.color_code %>" align="center" data-toggle="tooltip" title="<%=score.comment%>">
+                      <td class="<%= score.color_code %> rowDataSd" align="center" data-toggle="tooltip" title="<%=score.comment%>">
                         <%= score.score_value.to_s %>
                       </td>
                   <% end %>
